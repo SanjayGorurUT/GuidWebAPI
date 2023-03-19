@@ -52,7 +52,7 @@ class basicRequestHandler(tornado.web.RequestHandler):
 
         self.set_status(200)
         self.write(userDoc)
-        cache.setex(newGuid, datetime.timedelta(minutes=10), json.dumps(userDoc))
+        cache.setex(newGuid, datetime.timedelta(10), json.dumps(userDoc))
         client.access.guids.insert_one(userDoc)
         
 
@@ -67,8 +67,18 @@ class betterRequestHandler(tornado.web.RequestHandler):
             new_expire = guid["expire"] - 1
             if new_expire > 0:
                 client.access.guids.update_one({"guid": guid["guid"]}, {"$set": {"expire": new_expire}}, upsert = True)
+                cleanGuid = client.access.guids.find_one({"guid": guid["guid"]})
+                userDoc = {
+                    "guid": cleanGuid["guid"],
+                    "expire": cleanGuid["expire"],
+                    "user": cleanGuid["user"]
+                }
+                if cache.exists(guid["guid"]):
+                    cache.set(guid["guid"], json.dumps(userDoc))
             else:
                 client.access.guids.delete_one({"guid": guid["guid"]})
+                if cache.exists(guid["guid"]):
+                    cache.delete(guid["guid"])
     def post(self, uid):
         foundGuid = json.loads(cache.get(uid))
         if foundGuid == None:
@@ -110,7 +120,7 @@ class betterRequestHandler(tornado.web.RequestHandler):
 
             self.set_status(200)
             self.write(userDoc)
-            cache.setex(uid, datetime.timedelta(minutes=10), json.dumps(userDoc))
+            cache.setex(uid, datetime.timedelta(10), json.dumps(userDoc))
             client.access.guids.insert_one(userDoc)
         else:
             args = self.request.arguments
@@ -128,7 +138,7 @@ class betterRequestHandler(tornado.web.RequestHandler):
                 "expire": expire,
                 "user": user
             }
-            cache.set(uid, datetime.timedelta(minutes=10), json.dumps(userDoc))
+            cache.setex(uid, datetime.timedelta(10), json.dumps(userDoc))
             self.set_status(200)
             self.write(userDoc)
 
